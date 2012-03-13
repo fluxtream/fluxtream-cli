@@ -54,9 +54,10 @@ a  : command EOF
    ;
 
 command
-   : login
-   | log
-   | exit
+   : login |
+     log |
+     get |
+     exit
    ;
 
 exit
@@ -70,6 +71,12 @@ log
    ;
 
 login
+
    : LOGIN host=HOST username=ID
    { client.prompt($host.getText(), $username.getText()); }
+   ;
+   
+get
+   : GET connector=ID OAUTH_TOKENS
+   { client.get("/api/guest/" + $connector.getText() + "/oauthTokens"); }
    ;

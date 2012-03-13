@@ -31,6 +31,10 @@ options {
 LOGIN : 'login' ;
 LOG   : 'log' ;
 EXIT : 'quit' | 'exit' | 'bye';
+OAUTH_TOKENS 
+	:	'oauth tokens';
+GET    
+	:	'get' ;
 
 ID  :	('a'..'z'|'A'..'Z'|'_') ('a'..'z'|'A'..'Z'|'0'..'9'|'_')*
     ;
