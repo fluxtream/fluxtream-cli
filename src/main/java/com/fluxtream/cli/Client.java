@@ -4,6 +4,11 @@ import java.io.IOException;
 import java.io.PrintWriter;
 import java.net.MalformedURLException;
 import java.net.URL;
+import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import java.util.Map.Entry;
 
 import jline.console.ConsoleReader;
 
@@ -11,13 +16,17 @@ import org.antlr.runtime.ANTLRStringStream;
 import org.antlr.runtime.CommonTokenStream;
 import org.antlr.runtime.RecognitionException;
 import org.apache.http.Header;
+import org.apache.http.NameValuePair;
 import org.apache.http.auth.AuthScope;
 import org.apache.http.auth.UsernamePasswordCredentials;
 import org.apache.http.client.ResponseHandler;
+import org.apache.http.client.entity.UrlEncodedFormEntity;
 import org.apache.http.client.methods.HttpGet;
+import org.apache.http.client.methods.HttpPost;
 import org.apache.http.impl.auth.BasicScheme;
 import org.apache.http.impl.client.BasicResponseHandler;
 import org.apache.http.impl.client.DefaultHttpClient;
+import org.apache.http.message.BasicNameValuePair;
 
 public class Client {
 	
@@ -99,6 +108,33 @@ public class Client {
                     new AuthScope(hostUrl.getHost(), hostUrl.getPort()),
                     new UsernamePasswordCredentials(username, password));
 		}
+	}
+	
+	public void post(String url, Map<String,String> params) {
+        try {
+        	
+            HttpPost httppost = new HttpPost( host + url);
+            UsernamePasswordCredentials credentials = new UsernamePasswordCredentials(username, password);
+			BasicScheme scheme = new BasicScheme();
+			
+			Header authorizationHeader = scheme.authenticate(credentials, httppost);
+			httppost.addHeader(authorizationHeader);
+
+			Iterator<Entry<String, String>> iterator = params.entrySet().iterator();
+			
+	        List<NameValuePair> nameValuePairs = new ArrayList<NameValuePair>(params.size());
+			while (iterator.hasNext()) {
+				Entry<String,String> entry = iterator.next();
+		        nameValuePairs.add(new BasicNameValuePair(entry.getKey(), entry.getValue()));
+			}
+			httppost.setEntity(new UrlEncodedFormEntity(nameValuePairs));
+			
+            ResponseHandler<String> responseHandler = new BasicResponseHandler();
+            String response = httpClient.execute(httppost, responseHandler);
+            System.out.println(response);
+        } catch(Exception e) {
+        	e.printStackTrace();
+        }
 	}
 	
 	public void get(String url) {

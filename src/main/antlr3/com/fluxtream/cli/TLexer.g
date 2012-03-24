@@ -23,6 +23,8 @@ options {
 @header {
 
     package com.fluxtream.cli;
+    
+    import java.util.*;
 }
 
 // This is just a simple lexer that matches the usual suspects
@@ -35,7 +37,13 @@ OAUTH_TOKENS
 	:	'oauth tokens';
 GET    
 	:	'get' ;
+	
+CREATE 
+	:	'create';
 
+GUEST 
+	:	'guest';
+	
 ID  :	('a'..'z'|'A'..'Z'|'_') ('a'..'z'|'A'..'Z'|'0'..'9'|'_')*
     ;
 
@@ -51,6 +59,10 @@ WS  :   ( ' '
 
 HOST
     : 'http' 's'? '://' ID  ('.' ID)? (':' INT+)?'/'?
+    ;
+    
+EMAIL
+    : ('.' ID)? ID  '@' ID ('.' ID)?
     ;
     
 STRING

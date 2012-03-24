@@ -36,6 +36,8 @@ tokens {
 //
 @header {
     package com.fluxtream.cli;
+    import java.util.Map;
+    import java.util.HashMap;
 }
 
 @members {
@@ -57,7 +59,8 @@ command
    : login |
      log |
      get |
-     exit
+     exit |
+     create
    ;
 
 exit
@@ -80,3 +83,16 @@ get
    : GET connector=ID OAUTH_TOKENS
    { client.get("/api/guest/" + $connector.getText() + "/oauthTokens"); }
    ;
+
+create
+	:	CREATE GUEST username=ID password=ID email=EMAIL firstname=ID lastname=ID
+	{
+		Map<String,String> params = new HashMap<String,String>();
+		params.put("username", $username.getText());
+		params.put("password", $password.getText());
+		params.put("firstname", $firstname.getText());
+		params.put("lastname", $lastname.getText());
+		params.put("email", $email.getText());
+		client.post("/api/guest/create", params);
+	}
+	;
