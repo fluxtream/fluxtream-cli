@@ -43,10 +43,16 @@ CREATE
 
 GUEST 
 	:	'guest';
+
+BTUPLOAD
+	: 'btupload';
+
+PROPERTY
+	: 'property';
 	
 ID  :	('a'..'z'|'A'..'Z'|'_') ('a'..'z'|'A'..'Z'|'0'..'9'|'_')*
     ;
-
+	
 INT :	'0'..'9'+
     ;
 
@@ -62,7 +68,7 @@ HOST
     ;
     
 EMAIL
-    : ('.' ID)? ID  '@' ID ('.' ID)?
+    : ('.' ID)* ID  '@' ID ('.' ID)*
     ;
     
 STRING

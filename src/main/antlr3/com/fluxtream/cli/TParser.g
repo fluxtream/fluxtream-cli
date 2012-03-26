@@ -60,7 +60,9 @@ command
      log |
      get |
      exit |
-     create
+     create |
+     btupload |
+     getProperty
    ;
 
 exit
@@ -96,3 +98,17 @@ create
 		client.post("/api/guest/create", params);
 	}
 	;
+	
+btupload
+	:	BTUPLOAD connectorName=ID username=ID
+	{
+		client.get("/api/bodytrack/loadHistory?connectorName=" + $connectorName.getText() + "&username=" + username.getText());
+	};
+	
+getProperty
+	: GET PROPERTY propertyName=STRING
+	{
+		String property = $propertyName.getText().substring(1);
+		property = property.substring(0, property.length()-1);
+		client.get("/api/admin/get/property/" + property);
+	};
