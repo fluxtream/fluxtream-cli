@@ -64,7 +64,10 @@ command
      btupload |
      getProperty |
   	 deleteGuest |
-  	 listGuests
+  	 listGuests |
+  	 listRoles |
+  	 grantRole |
+  	 revokeRole
    ;
 
 exit
@@ -115,6 +118,27 @@ deleteGuest
 listGuests
    : LIST GUESTS
    { client.get("/api/guest/all"); }
+   ;
+   
+listRoles
+   : LIST ROLES username=ID
+   { client.get("/api/guest/" + $username.getText() + "/roles"); }
+   ;
+   
+grantRole
+   : GRANT ROLE username=ID role=ID
+   {
+		Map<String,String> params = new HashMap<String,String>();
+		params.put("roles", $role.getText());
+   		client.post("/api/guest/" + $username.getText() + "/roles", params);
+   }
+   ;
+   
+revokeRole
+   : REVOKE ROLE username=ID role=ID
+   {
+		client.delete("/api/guest/" + $username.getText() + "/roles/" + $role.getText());
+   }
    ;
 	
 getProperty

@@ -58,6 +58,19 @@ DELETE
 
 LIST
 	: 'list';
+
+GRANT
+	: 'grant';
+
+REVOKE
+	: 'revoke';
+
+ROLE
+	: 'role';
+
+ROLES
+	: 'roles';
+
 	
 ID  :	('a'..'z'|'A'..'Z'|'_') ('a'..'z'|'A'..'Z'|'0'..'9'|'_')*
     ;
