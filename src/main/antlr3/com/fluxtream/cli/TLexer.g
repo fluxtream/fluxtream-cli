@@ -44,11 +44,20 @@ CREATE
 GUEST 
 	:	'guest';
 
+GUESTS
+	:	'guests';
+
 BTUPLOAD
 	: 'btupload';
 
 PROPERTY
 	: 'property';
+
+DELETE
+	: 'delete';
+
+LIST
+	: 'list';
 	
 ID  :	('a'..'z'|'A'..'Z'|'_') ('a'..'z'|'A'..'Z'|'0'..'9'|'_')*
     ;

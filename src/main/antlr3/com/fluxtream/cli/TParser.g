@@ -62,7 +62,9 @@ command
      exit |
      create |
      btupload |
-     getProperty
+     getProperty |
+  	 deleteGuest |
+  	 listGuests
    ;
 
 exit
@@ -104,6 +106,16 @@ btupload
 	{
 		client.get("/api/bodytrack/loadHistory?connectorName=" + $connectorName.getText() + "&username=" + username.getText());
 	};
+   
+deleteGuest
+   : DELETE GUEST username=ID
+   { client.delete("/api/guest/" + $username.getText()); }
+   ;
+   
+listGuests
+   : LIST GUESTS
+   { client.get("/api/guest/all"); }
+   ;
 	
 getProperty
 	: GET PROPERTY propertyName=STRING

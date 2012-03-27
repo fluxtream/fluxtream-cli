@@ -21,6 +21,7 @@ import org.apache.http.auth.AuthScope;
 import org.apache.http.auth.UsernamePasswordCredentials;
 import org.apache.http.client.ResponseHandler;
 import org.apache.http.client.entity.UrlEncodedFormEntity;
+import org.apache.http.client.methods.HttpDelete;
 import org.apache.http.client.methods.HttpGet;
 import org.apache.http.client.methods.HttpPost;
 import org.apache.http.impl.auth.BasicScheme;
@@ -148,6 +149,23 @@ public class Client {
             
             ResponseHandler<String> responseHandler = new BasicResponseHandler();
             String response = httpClient.execute(httpget, responseHandler);
+            System.out.println(response);
+        } catch(Exception e) {
+        	e.printStackTrace();
+        }
+	}
+	
+	public void delete(String url) {
+        try {
+            HttpDelete httpdelete = new HttpDelete ( host + url);
+            UsernamePasswordCredentials credentials = new UsernamePasswordCredentials(username, password);
+			BasicScheme scheme = new BasicScheme();
+			
+			Header authorizationHeader = scheme.authenticate(credentials, httpdelete);
+			httpdelete.addHeader(authorizationHeader);
+            
+            ResponseHandler<String> responseHandler = new BasicResponseHandler();
+            String response = httpClient.execute(httpdelete, responseHandler);
             System.out.println(response);
         } catch(Exception e) {
         	e.printStackTrace();
