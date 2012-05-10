@@ -71,6 +71,13 @@ ROLE
 ROLES
 	: 'roles';
 
+RESET
+    : 'reset';
+
+METADATA
+    : 'metadata';
+
+
 	
 ID  :	('a'..'z'|'A'..'Z'|'_') ('a'..'z'|'A'..'Z'|'0'..'9'|'_')*
     ;

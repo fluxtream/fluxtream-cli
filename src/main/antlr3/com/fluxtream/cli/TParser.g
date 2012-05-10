@@ -67,7 +67,8 @@ command
   	 listGuests |
   	 listRoles |
   	 grantRole |
-  	 revokeRole
+  	 revokeRole |
+  	 resetMetadata
    ;
 
 exit
@@ -148,3 +149,10 @@ getProperty
 		property = property.substring(0, property.length()-1);
 		client.get("/api/admin/get/property/" + property);
 	};
+
+resetMetadata
+    : RESET METADATA
+    {
+        client.get("/api/admin/resetMetadata");
+    }
+    ;

@@ -44,6 +44,8 @@ public class Client {
 			String host = args[0];
 			if (!host.endsWith("/"))
 				host += "/";
+            if (!host.startsWith("http"))
+                host = "http://" + host;
 			client = new Client(host, args[1]);
 		}
 		else
