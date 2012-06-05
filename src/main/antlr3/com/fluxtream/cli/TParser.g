@@ -68,7 +68,8 @@ command
   	 listRoles |
   	 grantRole |
   	 revokeRole |
-  	 resetMetadata
+  	 executeUpdate |
+
    ;
 
 exit
@@ -150,9 +151,14 @@ getProperty
 		client.get("/api/admin/get/property/" + property);
 	};
 
-resetMetadata
-    : RESET METADATA
+executeUpdate
+    : EXECUTE_UPDATE jpql=STRING
     {
-        client.get("/api/admin/resetMetadata");
+        String jpqlQuery = $jpql.getText();
+        jpqlQuery = jpqlQuery.substring(1, jpqlQuery.length()-1);
+		Map<String,String> params = new HashMap<String,String>();
+		params.put("jpql", jpqlQuery);
+ 		params.put("test", "test");
+        client.post("api/admin/executeUpdate", params);
     }
     ;
