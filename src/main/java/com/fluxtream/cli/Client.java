@@ -7,12 +7,15 @@ import java.net.MalformedURLException;
 import java.net.URL;
 import java.util.*;
 import java.util.Map.Entry;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import com.sun.org.apache.bcel.internal.generic.GETFIELD;
 import com.sun.tools.javac.jvm.Pool;
 import jline.console.ConsoleReader;
 
 import org.apache.http.Header;
+import org.apache.http.HttpHost;
 import org.apache.http.NameValuePair;
 import org.apache.http.auth.AuthScope;
 import org.apache.http.auth.UsernamePasswordCredentials;
@@ -21,6 +24,8 @@ import org.apache.http.client.entity.UrlEncodedFormEntity;
 import org.apache.http.client.methods.HttpDelete;
 import org.apache.http.client.methods.HttpGet;
 import org.apache.http.client.methods.HttpPost;
+import org.apache.http.client.methods.HttpPut;
+import org.apache.http.conn.params.ConnRoutePNames;
 import org.apache.http.impl.auth.BasicScheme;
 import org.apache.http.impl.client.BasicResponseHandler;
 import org.apache.http.impl.client.DefaultHttpClient;
@@ -32,17 +37,84 @@ public class Client {
         GET, DELETE, PUT, POST
     }
 
+    static class Parameter {
+        String name, description, value = "";
+
+        Parameter(String name) {
+            this.name = name;
+        }
+
+        Parameter(String name, String description) {
+            this.name = name;
+            this.description = description;
+        }
+    }
+
     static class Command {
-        public String name, prettyName, uri;
-        public Method method;
-        List<String> parameters = new ArrayList<String>();
-        public Command(String name, String prettyName, Method method, String uri) {
+
+        String name, prettyName, uri;
+        Method method;
+        Pattern pattern = Pattern.compile("\\{(.+?)\\}");
+        List<String> parameterNames = new ArrayList<String>();
+        Map<String,Parameter> parameters = new HashMap<String,Parameter>();
+
+        Command(String name, String prettyName, Method method, String uri) {
             this.name = name;
             this.prettyName = prettyName;
             this.method = method;
-            this.uri = uri;
+            this.uri = parseUri(uri);
         }
-        public boolean hasParameters() {return parameters.size()>0;}
+
+        private String parseUri(String uri) {
+            Matcher matcher = pattern.matcher(uri);
+            while (matcher.find())
+                addParameter(matcher.group(1));
+            return uri;
+        }
+
+        boolean hasParameters() {return parameters.size()>0;}
+
+        void addParameter(String parameterName) {
+            // preserve parameter order
+            parameterNames.add(parameterName);
+            parameters.put(parameterName,  new Parameter(parameterName));
+        }
+
+        void addParameter(String parameterName, String parameterDesc) {
+            parameterNames.add(parameterName);
+            parameters.put(parameterName,  new Parameter(parameterName, parameterDesc));
+        }
+
+        void setParameterValue(String parameterName, String parameterValue) {
+            parameters.get(parameterName).value = parameterValue;
+        }
+
+        Collection<Parameter> getParameters() {
+            // preserve parameter order
+            Collection<Parameter> params = new ArrayList<Parameter>();
+            for (String parameterName : parameterNames)
+                params.add(parameters.get(parameterName));
+            return params;
+        }
+
+        public String uri() {
+            StringBuilder builder = new StringBuilder();
+            Matcher matcher = pattern.matcher(uri);
+            int i = 0;
+            while (matcher.find()) {
+                String replacement = parameters.get(matcher.group(1)).value;
+                builder.append(uri.substring(i, matcher.start()));
+                builder.append(replacement);
+                i = matcher.end();
+            }
+            builder.append(uri.substring(i, uri.length()));
+            return builder.toString();
+        }
+
+        public void resetParameters() {
+            for (String parameterName : parameterNames)
+                parameters.get(parameterName).value = "";
+        }
     }
 
     ConsoleReader consoleReader;
@@ -73,9 +145,15 @@ public class Client {
 	public Client(String host, String username) throws IOException {
 		this.username = username;
 		this.host = host;
+        reload();
+	}
+
+    private void reload() throws IOException {
+        commandsByPrettyName.clear();
+        commandsByDefinition.clear();
         loadCommands("admin-commands");
         loadCommands("dashboard-commands");
-	}
+    }
 
     private void loadCommands(String propertyFile) throws IOException {
         Properties props = new Properties();
@@ -86,29 +164,42 @@ public class Client {
             if (key.endsWith(".command")){
                 String commandName = key.split("\\.")[0];
                 String commandDefinition = props.getProperty(key);
-                String methodString = commandDefinition.split(" ")[0];
-                String uri = commandDefinition.split(" ")[1];
+                Pattern pattern = Pattern.compile("POST|PUT|DELETE|GET");
+                final Matcher matcher = pattern.matcher(commandDefinition);
+                matcher.find(0);
+                String methodString = matcher.group(0);
+                String uri = commandDefinition.substring(methodString.length()+1);
                 String prettyName = props.getProperty(commandName + ".prettyName");
-//                Method method = Method.valueOf(Method.class, methodString); // why it doesn't work is a mystery to me
                 Method method = getMethod(methodString);
                 Command command = new Command(commandName, prettyName, method, uri);
+                addCommandParameters(command, props);
                 commandsByPrettyName.put(prettyName, command);
                 commandsByDefinition.put(commandDefinition, command);
             }
         }
     }
 
+    private void addCommandParameters(Command command, Properties props) {
+        final String parameters = props.getProperty(command.name + ".params");
+        if (parameters==null)
+            return;
+        StringTokenizer st = new StringTokenizer(parameters,  ",");
+        while (st.hasMoreTokens()) {
+            String parameterString = st.nextToken().trim();
+            String[] parts = parameterString.split("/");
+            if (parts.length==1)
+                command.addParameter(parts[0].trim());
+            else
+                command.addParameter(parts[0].trim(), parts[1].trim());
+        }
+    }
+
     private Method getMethod(String methodString) {
-        if (methodString.equals("GET"))
-            return Method.GET;
-        else if (methodString.equals("DELETE"))
-            return Method.DELETE;
-        else if (methodString.equals("PUT"))
-            return Method.PUT;
-        else if (methodString.equals("POST"))
-            return Method.POST;
-        else
-            return null;
+        final Method[] values = Method.values();
+        for (Method value : values)
+            if (methodString.equals(value.toString()))
+                return value;
+        return null;
     }
 
     public void run() throws IOException {
@@ -122,10 +213,16 @@ public class Client {
 		}
 	}
 
-	public void parseLine(String line) {
+	public void parseLine(String line) throws IOException {
         line = line.trim();
         if (line.startsWith("exit"))
             System.exit(0);
+        else if (line.startsWith("help"))
+            help();
+        else if (line.startsWith("set proxy"))
+            setProxy();
+        else if (line.startsWith("reload"))
+            reload();
         else {
             if (commandsByDefinition.containsKey(line))
                 executeCommand(commandsByDefinition.get(line));
@@ -136,12 +233,62 @@ public class Client {
         }
 	}
 
-    private void executeCommand(Command command) {
+    private void setProxy() throws IOException {
+        String ip = consoleReader.readLine("Proxy Host/IP: ");
+        String port = consoleReader.readLine("Proxy Port: ");
+        HttpHost proxy = new HttpHost(ip, Integer.valueOf(port), "http");
+        httpClient.getParams().setParameter(ConnRoutePNames.DEFAULT_PROXY,proxy);
+    }
+
+    private void help() {
+        System.out.println("set proxy: set http proxy (e.g. for debugging)");
+        System.out.println("reload: reload command definitions");
+        System.out.println("exit: quit");
+        for (String s : commandsByPrettyName.keySet()) {
+            Command command = commandsByPrettyName.get(s);
+            System.out.println(command.prettyName + ": " + command.method + " (/api)" + command.uri);
+        }
+    }
+
+    private void executeCommand(Command command) throws IOException {
+        promptParameters(command);
+        final Map<String, String> params = toParameterMap(command.getParameters());
         switch(command.method) {
             case GET:
-                get("api" + command.uri);
+                get("api" + command.uri());
+                break;
+            case POST:
+                post("api" + command.uri(), params);
+                break;
+            case DELETE:
+                delete("api" + command.uri());
+                break;
+            case PUT:
+                put("api" + command.uri());
                 break;
         }
+    }
+
+    private Map<String, String> toParameterMap(Collection<Parameter> parameters) {
+        Map<String,String> params = new HashMap<String,String>();
+        for (Parameter parameter : parameters)
+            params.put(parameter.name, parameter.value);
+        return params;
+    }
+
+    private void promptParameters(Command command) throws IOException {
+        command.resetParameters();
+        final Collection<Parameter> parameters = command.getParameters();
+        consoleReader.setHistoryEnabled(false);
+        for (Parameter parameter : parameters) {
+            String value = "";
+            if (parameter.description!=null)
+                value = consoleReader.readLine(parameter.description + ": ");
+            else
+                value = consoleReader.readLine(parameter.name + ": ");
+            command.setParameterValue(parameter.name, value);
+        }
+        consoleReader.setHistoryEnabled(true);
     }
 
     public void log() {
@@ -174,8 +321,25 @@ public class Client {
                     new UsernamePasswordCredentials(username, password));
 		}
 	}
-	
-	public void post(String url, Map<String,String> params) {
+
+    public void put(String url) {
+        try {
+            HttpPut httpPut = new HttpPut( host + url);
+            UsernamePasswordCredentials credentials = new UsernamePasswordCredentials(username, password);
+            BasicScheme scheme = new BasicScheme();
+
+            Header authorizationHeader = scheme.authenticate(credentials, httpPut);
+            httpPut.addHeader(authorizationHeader);
+
+            ResponseHandler<String> responseHandler = new BasicResponseHandler();
+            String response = httpClient.execute(httpPut, responseHandler);
+            System.out.println(response);
+        } catch(Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    public void post(String url, Map<String,String> params) {
         try {
         	
             HttpPost httppost = new HttpPost( host + url);
@@ -204,7 +368,6 @@ public class Client {
 	
 	public void get(String url) {
         try {
-            System.out.println("GETting " + url);
             HttpGet httpget = new HttpGet( host + url);
             UsernamePasswordCredentials credentials = new UsernamePasswordCredentials(username, password);
 			BasicScheme scheme = new BasicScheme();
