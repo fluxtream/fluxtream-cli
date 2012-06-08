@@ -1,0 +1,1 @@
+mvn install:install-file  -Dfile=jline-1.2.jar -DgroupId=jline -DartifactId=jline -Dversion=1.0 -Dpackaging=jar

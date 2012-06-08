@@ -1,18 +1,16 @@
 package com.fluxtream.cli;
 
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.PrintWriter;
+import java.io.*;
 import java.net.MalformedURLException;
 import java.net.URL;
+import java.net.URLEncoder;
 import java.util.*;
 import java.util.Map.Entry;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import com.sun.org.apache.bcel.internal.generic.GETFIELD;
-import com.sun.tools.javac.jvm.Pool;
-import jline.console.ConsoleReader;
+import jline.ANSIBuffer;
+import jline.ConsoleReader;
 
 import org.apache.http.Header;
 import org.apache.http.HttpHost;
@@ -52,13 +50,15 @@ public class Client {
 
     static class Command {
 
+        String resource;
         String name, prettyName, uri;
         Method method;
         Pattern pattern = Pattern.compile("\\{(.+?)\\}");
         List<String> parameterNames = new ArrayList<String>();
         Map<String,Parameter> parameters = new HashMap<String,Parameter>();
 
-        Command(String name, String prettyName, Method method, String uri) {
+        Command(String resource, String name, String prettyName, Method method, String uri) {
+            this.resource = resource;
             this.name = name;
             this.prettyName = prettyName;
             this.method = method;
@@ -97,14 +97,14 @@ public class Client {
             return params;
         }
 
-        public String uri() {
+        public String uri() throws UnsupportedEncodingException {
             StringBuilder builder = new StringBuilder();
             Matcher matcher = pattern.matcher(uri);
             int i = 0;
             while (matcher.find()) {
                 String replacement = parameters.get(matcher.group(1)).value;
                 builder.append(uri.substring(i, matcher.start()));
-                builder.append(replacement);
+                builder.append(URLEncoder.encode(replacement, "UTF-8"));
                 i = matcher.end();
             }
             builder.append(uri.substring(i, uri.length()));
@@ -115,6 +115,17 @@ public class Client {
             for (String parameterName : parameterNames)
                 parameters.get(parameterName).value = "";
         }
+
+        public String getParameterString() {
+            StringBuilder sb = new StringBuilder();
+            int i=0;
+            for (String parameterName : parameterNames) {
+                if (i>0) sb.append(" ");
+                sb.append("<").append(parameterName).append(">");
+                i++;
+            }
+            return sb.toString();
+        }
     }
 
     ConsoleReader consoleReader;
@@ -123,7 +134,6 @@ public class Client {
     String username, password;
     String host;
     Map<String, Command> commandsByPrettyName = new HashMap<String,Command>();
-    Map<String, Command> commandsByDefinition = new HashMap<String,Command>();
 
     public static void main(String [] args) throws Exception {
 		Client client = null;
@@ -141,6 +151,12 @@ public class Client {
 	}
 	
 	public Client() {}
+
+    public static final String ansiFormat(String s) {
+        ANSIBuffer buffer = new ANSIBuffer();
+        buffer.green(s);
+        return buffer.toString(true);
+    }
 	
 	public Client(String host, String username) throws IOException {
 		this.username = username;
@@ -148,17 +164,31 @@ public class Client {
         reload();
 	}
 
+    private void loadProperties() throws IOException {
+        Properties props = new Properties();
+        final InputStream inputStream = ClassLoader.getSystemResourceAsStream("cli.properties");
+        props.load(inputStream);
+        String proxyHost = props.getProperty("proxy.host");
+        if (proxyHost!=null) {
+            getHttpClient();
+            String proxyPort = props.getProperty("proxy.port");
+            setProxy(proxyHost, proxyPort);
+        }
+    }
+
     private void reload() throws IOException {
         commandsByPrettyName.clear();
-        commandsByDefinition.clear();
+        loadCommands("guest-commands");
         loadCommands("admin-commands");
         loadCommands("dashboard-commands");
+        loadCommands("widget-commands");
     }
 
     private void loadCommands(String propertyFile) throws IOException {
         Properties props = new Properties();
         final InputStream inputStream = ClassLoader.getSystemResourceAsStream(propertyFile + ".properties");
         props.load(inputStream);
+        String resource = propertyFile.substring(0, propertyFile.indexOf("-"));
         for (Entry<Object, Object> entry : props.entrySet()) {
             final String key = (String) entry.getKey();
             if (key.endsWith(".command")){
@@ -171,10 +201,9 @@ public class Client {
                 String uri = commandDefinition.substring(methodString.length()+1);
                 String prettyName = props.getProperty(commandName + ".prettyName");
                 Method method = getMethod(methodString);
-                Command command = new Command(commandName, prettyName, method, uri);
+                Command command = new Command(resource, commandName, prettyName, method, uri);
                 addCommandParameters(command, props);
                 commandsByPrettyName.put(prettyName, command);
-                commandsByDefinition.put(commandDefinition, command);
             }
         }
     }
@@ -205,6 +234,7 @@ public class Client {
     public void run() throws IOException {
 		String line = null;
 		this.consoleReader = new ConsoleReader(System.in, new PrintWriter(System.out));
+        loadProperties();
 		if (this.host!=null&&this.username!=null)
             prompt(this.host, this.username);
 		while(true) {
@@ -213,45 +243,86 @@ public class Client {
 		}
 	}
 
-	public void parseLine(String line) throws IOException {
-        line = line.trim();
-        if (line.startsWith("exit"))
+	public void parseLine(String input) throws IOException {
+        input = input.trim();
+        if (input.startsWith("exit"))
             System.exit(0);
-        else if (line.startsWith("help"))
+        else if (input.startsWith("help"))
             help();
-        else if (line.startsWith("set proxy"))
+        else if (input.startsWith("set proxy"))
             setProxy();
-        else if (line.startsWith("reload"))
+        else if (input.startsWith("reload"))
             reload();
         else {
-            if (commandsByDefinition.containsKey(line))
-                executeCommand(commandsByDefinition.get(line));
-            else if (commandsByPrettyName.containsKey(line))
-                executeCommand(commandsByPrettyName.get(line));
-            else
-                System.out.println("I am sorry, " + username + ". I don't understand this command.");
+            String command = commandExists(input);
+            if (command!=null) {
+                String arguments = input.substring(command.length());
+                executeCommand(commandsByPrettyName.get(command), arguments.trim());
+            } else
+                System.out.println(ansiFormat("I am sorry, " + username + ". I don't understand this command."));
         }
 	}
 
+    private String commandExists(String input) {
+        for (String command : commandsByPrettyName.keySet()) {
+            if (input.startsWith(command))
+                return command;
+        }
+        return null;
+    }
+
     private void setProxy() throws IOException {
+        consoleReader.setUseHistory(false);
         String ip = consoleReader.readLine("Proxy Host/IP: ");
         String port = consoleReader.readLine("Proxy Port: ");
+        setProxy(ip, port);
+    }
+
+    private void setProxy(String ip, String port) {
         HttpHost proxy = new HttpHost(ip, Integer.valueOf(port), "http");
         httpClient.getParams().setParameter(ConnRoutePNames.DEFAULT_PROXY,proxy);
+        consoleReader.setUseHistory(true);
     }
 
     private void help() {
-        System.out.println("set proxy: set http proxy (e.g. for debugging)");
-        System.out.println("reload: reload command definitions");
-        System.out.println("exit: quit");
+        System.out.println(ansiFormat("set proxy: set http proxy (e.g. for debugging)"));
+        System.out.println(ansiFormat("reload: reload command definitions"));
+        System.out.println(ansiFormat("exit: quit"));
+        System.out.println();
+        Map<String,List<Command>> commandsByResource = new HashMap<String,List<Command>>();
         for (String s : commandsByPrettyName.keySet()) {
             Command command = commandsByPrettyName.get(s);
-            System.out.println(command.prettyName + ": " + command.method + " (/api)" + command.uri);
+            if (commandsByResource.get(command.resource)==null)
+                commandsByResource.put(command.resource, new ArrayList<Command>());
+            commandsByResource.get(command.resource).add(command);
+        }
+        for (String resource : commandsByResource.keySet()) {
+            System.out.println(ansiFormat(resource));
+            for (int i=0; i<resource.length(); i++)
+                System.out.print(ansiFormat("-"));
+            System.out.println();
+            final List<Command> resourceCommands = commandsByResource.get(resource);
+            for (Command resourceCommand : resourceCommands) {
+                System.out.println(ansiFormat(resourceCommand.prettyName + " " + resourceCommand.getParameterString()));
+            }
+            System.out.println();
         }
     }
 
-    private void executeCommand(Command command) throws IOException {
-        promptParameters(command);
+    private void executeCommand(Command command, String arguments) throws IOException {
+        if (arguments.length()>0) {
+            List<String> argumentsList = getArgumentsList(arguments);
+            final Collection<Parameter> commandParameters = command.getParameters();
+            if (commandParameters.size()!=argumentsList.size()) {
+                System.out.println(ansiFormat("Sorry, you didn't supply the right number of parameters"));
+                System.out.println(ansiFormat("Expected: " + command.getParameterString()));
+                return;
+            }
+            int i=0;
+            for (Parameter commandParameter : commandParameters)
+                commandParameter.value = argumentsList.get(i++);
+        } else
+            promptParameters(command);
         final Map<String, String> params = toParameterMap(command.getParameters());
         switch(command.method) {
             case GET:
@@ -269,6 +340,22 @@ public class Client {
         }
     }
 
+    private List<String> getArgumentsList(String input) {
+        List<String> matchList = new ArrayList<String>();
+        Pattern regex = Pattern.compile("[^\\s\"']+|\"([^\"]*)\"|'([^']*)'");
+        Matcher regexMatcher = regex.matcher(input);
+        while (regexMatcher.find()) {
+            if (regexMatcher.group(1) != null) {
+                matchList.add(regexMatcher.group(1));
+            } else if (regexMatcher.group(2) != null) {
+                matchList.add(regexMatcher.group(2));
+            } else {
+                matchList.add(regexMatcher.group());
+            }
+        }
+        return matchList;
+    }
+
     private Map<String, String> toParameterMap(Collection<Parameter> parameters) {
         Map<String,String> params = new HashMap<String,String>();
         for (Parameter parameter : parameters)
@@ -279,7 +366,7 @@ public class Client {
     private void promptParameters(Command command) throws IOException {
         command.resetParameters();
         final Collection<Parameter> parameters = command.getParameters();
-        consoleReader.setHistoryEnabled(false);
+        consoleReader.setUseHistory(false);
         for (Parameter parameter : parameters) {
             String value = "";
             if (parameter.description!=null)
@@ -288,7 +375,7 @@ public class Client {
                 value = consoleReader.readLine(parameter.name + ": ");
             command.setParameterValue(parameter.name, value);
         }
-        consoleReader.setHistoryEnabled(true);
+        consoleReader.setUseHistory(true);
     }
 
     public void log() {
@@ -298,12 +385,11 @@ public class Client {
 	public void prompt(String url, String username) {
 		String password;
 		try {
-			consoleReader.setPrompt("password: ");
-			password = consoleReader.readLine(new Character('*'));
+			password = consoleReader.readLine("password: ", new Character('*'));
 			this.host = url;
 			this.username = username;
 			this.password = password;
-			consoleReader.setPrompt("flx> ");
+			consoleReader.setDefaultPrompt("flx> ");
 			getHttpClient();
 			if (url.endsWith("/"))
 				get(url.endsWith("/")?"api/guest/":"/api/guest/");
@@ -333,7 +419,7 @@ public class Client {
 
             ResponseHandler<String> responseHandler = new BasicResponseHandler();
             String response = httpClient.execute(httpPut, responseHandler);
-            System.out.println(response);
+            System.out.println(ansiFormat(response));
         } catch(Exception e) {
             e.printStackTrace();
         }
@@ -360,7 +446,7 @@ public class Client {
 			
             ResponseHandler<String> responseHandler = new BasicResponseHandler();
             String response = httpClient.execute(httppost, responseHandler);
-            System.out.println(response);
+            System.out.println(ansiFormat(response));
         } catch(Exception e) {
         	e.printStackTrace();
         }
@@ -377,7 +463,8 @@ public class Client {
             
             ResponseHandler<String> responseHandler = new BasicResponseHandler();
             String response = httpClient.execute(httpget, responseHandler);
-            System.out.println(response);
+            ANSIBuffer buffer = new ANSIBuffer();
+            System.out.println(buffer.green(response).toString(true));
         } catch(Exception e) {
         	e.printStackTrace();
         }
@@ -394,7 +481,7 @@ public class Client {
             
             ResponseHandler<String> responseHandler = new BasicResponseHandler();
             String response = httpClient.execute(httpdelete, responseHandler);
-            System.out.println(response);
+            System.out.println(ansiFormat(response));
         } catch(Exception e) {
         	e.printStackTrace();
         }
