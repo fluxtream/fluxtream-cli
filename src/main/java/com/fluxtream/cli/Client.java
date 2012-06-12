@@ -181,6 +181,7 @@ public class Client {
         loadCommands("guest-commands");
         loadCommands("admin-commands");
         loadCommands("dashboard-commands");
+        loadCommands("repository-commands");
         loadCommands("widget-commands");
     }
 
