@@ -184,6 +184,7 @@ public class Client {
         loadCommands("repository-commands");
         loadCommands("widget-commands");
         loadCommands("updates-commands");
+        loadCommands("updateTasks-commands");
     }
 
     private void loadCommands(String propertyFile) throws IOException {
