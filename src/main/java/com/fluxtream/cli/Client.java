@@ -166,7 +166,7 @@ public class Client {
 
     private void loadProperties() throws IOException {
         Properties props = new Properties();
-        final InputStream inputStream = ClassLoader.getSystemResourceAsStream("cli.properties");
+        final InputStream inputStream = ClassLoader.getSystemResourceAsStream("CLI.properties");
         props.load(inputStream);
         String proxyHost = props.getProperty("proxy.host");
         if (proxyHost!=null) {
@@ -185,6 +185,7 @@ public class Client {
         loadCommands("widget-commands");
         loadCommands("updates-commands");
         loadCommands("updateTasks-commands");
+        loadCommands("sync-commands");
     }
 
     private void loadCommands(String propertyFile) throws IOException {
