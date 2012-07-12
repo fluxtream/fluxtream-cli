@@ -153,6 +153,8 @@ public class Client {
 	public Client() {}
 
     public static final String ansiFormat(String s) {
+        if (System.getProperty("os.name").toLowerCase().startsWith("win"))
+            return s;
         ANSIBuffer buffer = new ANSIBuffer();
         buffer.green(s);
         return buffer.toString(true);
