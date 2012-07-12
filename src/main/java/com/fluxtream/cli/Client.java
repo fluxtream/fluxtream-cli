@@ -186,6 +186,7 @@ public class Client {
         loadCommands("updates-commands");
         loadCommands("updateTasks-commands");
         loadCommands("sync-commands");
+        loadCommands("bodytrack-commands");
     }
 
     private void loadCommands(String propertyFile) throws IOException {
