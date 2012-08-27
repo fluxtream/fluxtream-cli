@@ -182,6 +182,7 @@ public class Client {
         commandsByPrettyName.clear();
         loadCommands("guest-commands");
         loadCommands("admin-commands");
+        loadCommands("connector-commands");
         loadCommands("dashboard-commands");
         loadCommands("repository-commands");
         loadCommands("widget-commands");
@@ -255,6 +256,10 @@ public class Client {
         input = input.trim();
         if (input.startsWith("exit"))
             System.exit(0);
+        else if (input.startsWith("logout"))
+            password = "";
+        else if (input.startsWith("login"))
+            prompt(this.host, this.username);
         else if (input.startsWith("help"))
             help();
         else if (input.startsWith("set proxy"))
